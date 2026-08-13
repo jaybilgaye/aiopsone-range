@@ -18,11 +18,12 @@ app.set('views', __dirname + '/views');
 // ---------------------------------------------------------------------------
 // FLAW 1 — Hardcoded credentials.
 // Target of: the Gitleaks pre-commit lesson, TruffleHog history lesson.
-// These are AWS's own published example values. They are inert and resolve to
-// nothing. A scanner still matches them, which is the point.
+// Fabricated values that resolve to nothing. NOT AWS's published example
+// key — gitleaks allowlists those by default, so a lab built on them would
+// silently find nothing. Verified to trigger gitleaks 8.30.1.
 // ---------------------------------------------------------------------------
-const AWS_ACCESS_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
-const AWS_SECRET_ACCESS_KEY = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY';
+const AWS_ACCESS_KEY_ID = 'AKIA3XZP7QK2WVNR8TLM';
+const AWS_SECRET_ACCESS_KEY = 'kR8fT2wPmZ4vN7bXcQ1yJ6hL0sD3gA5eU9iO2pWn';
 const DB_PASSWORD = 'hunter2';
 const JWT_SIGNING_KEY = 'dev-secret-do-not-use';
 

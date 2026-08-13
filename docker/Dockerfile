@@ -17,10 +17,11 @@
 FROM node:16
 
 # FLAW 2 — a secret baked into a layer. Even if a later layer deletes it, it
-# stays in the image history and `docker history` will show it. These are AWS's
-# published example values and are inert.
-ENV AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-ENV AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY
+# stays in the image history and `docker history` will show it. Fabricated
+# values, inert — deliberately not AWS's published example key, which scanners
+# allowlist.
+ENV AWS_ACCESS_KEY_ID=AKIA3XZP7QK2WVNR8TLM
+ENV AWS_SECRET_ACCESS_KEY=kR8fT2wPmZ4vN7bXcQ1yJ6hL0sD3gA5eU9iO2pWn
 ENV DB_PASSWORD=hunter2
 
 WORKDIR /app
