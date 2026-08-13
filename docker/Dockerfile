@@ -12,9 +12,9 @@
 #
 # Do not push this image to a public registry.
 
-# FLAW 1 — unpinned, outdated base. `latest` is not a version, and this major
-# is long past its support window, so the OS package CVE count is high.
-FROM node:16
+# FLAW 1 — outdated base. Node 18 reached end-of-life in April 2025, and the
+# tag floats rather than pinning a digest, so the OS package CVE count is high.
+FROM node:18
 
 # FLAW 2 — a secret baked into a layer. Even if a later layer deletes it, it
 # stays in the image history and `docker history` will show it. Fabricated
@@ -32,7 +32,7 @@ COPY . .
 
 # FLAW 4 — installing with no lockfile guarantee, and pulling extra tooling into
 # the runtime image that has no business being in production.
-RUN npm install --unsafe-perm \
+RUN cd /app/app && npm install --unsafe-perm \
     && apt-get update \
     && apt-get install -y curl netcat-openbsd \
     && echo "done"
@@ -42,6 +42,10 @@ RUN npm install --unsafe-perm \
 
 # FLAW 6 — no HEALTHCHECK, so an orchestrator cannot tell a wedged container from
 # a working one.
+
+# The container is its own network namespace, so bind all interfaces inside it.
+# Publish to the host's loopback only:  docker run -p 127.0.0.1:3100:3000
+ENV HOST=0.0.0.0
 
 EXPOSE 3000
 

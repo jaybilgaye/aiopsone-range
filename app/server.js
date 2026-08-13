@@ -8,7 +8,7 @@
  */
 
 const express = require('express');
-const sqlite3 = require('sqlite3');
+const initSqlJs = require('sql.js');
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
@@ -27,16 +27,15 @@ const AWS_SECRET_ACCESS_KEY = 'kR8fT2wPmZ4vN7bXcQ1yJ6hL0sD3gA5eU9iO2pWn';
 const DB_PASSWORD = 'hunter2';
 const JWT_SIGNING_KEY = 'dev-secret-do-not-use';
 
-const db = new sqlite3.Database(':memory:');
-db.serialize(() => {
+// sql.js is SQLite compiled to WebAssembly: real SQL, real injection, and no
+// native toolchain — so the lab installs on any architecture.
+let db = null;
+initSqlJs().then((SQL) => {
+  db = new SQL.Database();
   db.run('CREATE TABLE products (id INTEGER, name TEXT, price REAL)');
-  const seed = db.prepare('INSERT INTO products VALUES (?, ?, ?)');
-  [
-    [1, 'Widget', 9.99],
-    [2, 'Gadget', 24.5],
-    [3, 'Doohickey', 3.75],
-  ].forEach((row) => seed.run(row));
-  seed.finalize();
+  db.run(
+    "INSERT INTO products VALUES (1,'Widget',9.99),(2,'Gadget',24.5),(3,'Doohickey',3.75)"
+  );
 });
 
 app.get('/', (req, res) => {
@@ -53,13 +52,16 @@ app.get('/search', (req, res) => {
   const query = req.query.q || '';
   const sql = "SELECT * FROM products WHERE name LIKE '%" + query + "%'";
 
-  db.all(sql, (err, rows) => {
-    if (err) {
-      // FLAW 3 — verbose error disclosure: leaks the query and the schema.
-      return res.status(500).send('<pre>' + err.message + '\n' + sql + '</pre>');
-    }
+  try {
+    const out = db.exec(sql);
+    const rows = out.length
+      ? out[0].values.map(([id, name, price]) => ({ id, name, price }))
+      : [];
     res.render('index', { results: rows, query });
-  });
+  } catch (err) {
+    // FLAW 3 — verbose error disclosure: leaks the query and the schema.
+    res.status(500).send('<pre>' + err.message + '\n' + sql + '</pre>');
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -93,7 +95,12 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 // not to do. Use a port forward or run the exercise on the machine itself.
 // ---------------------------------------------------------------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`[range] INTENTIONALLY VULNERABLE app on http://127.0.0.1:${PORT}`);
+// Loopback by default. Inside a container 127.0.0.1 is the container's own
+// loopback, so the image sets HOST=0.0.0.0 — the container is already an
+// isolation boundary, and the guard that matters there is publishing the port
+// to the host's loopback only:  docker run -p 127.0.0.1:3100:3000
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`[range] INTENTIONALLY VULNERABLE app on http://${HOST}:${PORT}`);
   console.log('[range] Local use only. Do not expose this.');
 });
