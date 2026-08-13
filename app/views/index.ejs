@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <title>AiOpsOne Range — vulnerable demo app</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; }
+    .warn { background: #fee; border-left: 4px solid #c00; padding: .75rem 1rem; margin-bottom: 2rem; }
+    input { padding: .5rem; width: 20rem; }
+    table { border-collapse: collapse; margin-top: 1rem; }
+    td, th { border: 1px solid #ddd; padding: .4rem .8rem; text-align: left; }
+  </style>
+</head>
+<body>
+  <p class="warn"><strong>Intentionally vulnerable.</strong> Teaching material. Local use only.</p>
+  <h1>Product search</h1>
+  <form action="/search" method="get">
+    <input name="q" value="<%= query %>" placeholder="try: Widget">
+    <button type="submit">Search</button>
+  </form>
+
+  <% if (results) { %>
+    <table>
+      <tr><th>ID</th><th>Name</th><th>Price</th></tr>
+      <% results.forEach(function (r) { %>
+        <!-- FLAW: <%- %> renders unescaped. Deliberate — stored/reflected XSS sink. -->
+        <tr><td><%= r.id %></td><td><%- r.name %></td><td><%= r.price %></td></tr>
+      <% }); %>
+    </table>
+    <% if (results.length === 0) { %><p>No results.</p><% } %>
+  <% } %>
+</body>
+</html>

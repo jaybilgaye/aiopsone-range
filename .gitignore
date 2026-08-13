@@ -1,0 +1,18 @@
+node_modules/
+.env
+.env.*
+*.log
+
+# Terraform — state can contain resource detail; never commit it
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+.terraform.lock.hcl
+
+# Scanner output
+*.sarif
+gitleaks-report.json
+trivy-report.json
+checkov-report.*

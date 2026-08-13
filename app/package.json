@@ -1,0 +1,23 @@
+{
+  "name": "aiopsone-range-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "INTENTIONALLY VULNERABLE demo app. Local use only. Do not deploy.",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "//": "Dependencies are deliberately pinned to old versions with published advisories. This is the SCA lessons' target — let the scanner tell you which CVEs, that is the exercise.",
+  "dependencies": {
+    "express": "4.16.0",
+    "lodash": "4.17.4",
+    "minimist": "1.2.0",
+    "jsonwebtoken": "8.1.0",
+    "sqlite3": "4.0.0",
+    "ejs": "2.5.7",
+    "axios": "0.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
