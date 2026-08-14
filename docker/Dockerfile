@@ -14,7 +14,7 @@
 
 # FLAW 1 — outdated base. Node 18 reached end-of-life in April 2025, and the
 # tag floats rather than pinning a digest, so the OS package CVE count is high.
-FROM node:18
+FROM node:26
 
 # FLAW 2 — a secret baked into a layer. Even if a later layer deletes it, it
 # stays in the image history and `docker history` will show it. Fabricated
