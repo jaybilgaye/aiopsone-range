@@ -1,0 +1,65 @@
+# Standalone IaC security workflow for the aiopsone-range lab.
+#
+# This is deliberately SEPARATE from devsecops-pipeline.yml. Infrastructure is
+# often owned by a different team, changes on a different cadence, and lives in
+# repos that ship no application at all. A focused workflow you can reuse across
+# every Terraform repo beats folding IaC into one monolith per project.
+#
+# Reusable two ways:
+#   * path-filtered — only runs when Terraform actually changes
+#   * `workflow_call` — a central copy other repos invoke with one line
+name: iac-security
+
+on:
+  push:
+    paths:
+      - '**.tf'
+      - '.github/workflows/iac-security.yml'
+  pull_request:
+    paths:
+      - '**.tf'
+  workflow_call:        # other repos: `uses: jaybilgaye/aiopsone-range/.github/workflows/iac-security.yml@main`
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Syntax and style — fast, no security opinion.
+  terraform:
+    name: "terraform fmt + validate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: fmt (style — reports, does not block)
+        run: terraform -chdir=terraform fmt -check -recursive
+        continue-on-error: true
+      - name: init + validate
+        run: |
+          terraform -chdir=terraform init -backend=false -no-color
+          terraform -chdir=terraform validate -no-color
+
+  # The gate — broadest ruleset, catches the wildcard IAM policy.
+  checkov:
+    name: "Checkov (gate)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          soft_fail: false
+
+  # Second opinion — container/secret coverage, different severity model.
+  trivy-config:
+    name: "Trivy config (second opinion)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: terraform/
+          severity: HIGH,CRITICAL
+          exit-code: 1

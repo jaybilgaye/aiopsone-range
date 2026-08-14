@@ -1,0 +1,85 @@
+# Standalone container security workflow for the aiopsone-range lab.
+#
+# Separate from the monolith on purpose: only repos that ship an image need it,
+# it triggers on Dockerfile/build changes rather than every push, and it is the
+# natural home for the SBOM your supply-chain and audit obligations depend on.
+# Reuse it across every service repo via `workflow_call`.
+name: container-security
+
+on:
+  push:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/container-security.yml'
+  pull_request:
+    paths:
+      - 'docker/**'
+  workflow_call:        # other repos: `uses: jaybilgaye/aiopsone-range/.github/workflows/container-security.yml@main`
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Reads the Dockerfile — no build needed, so it is the fast pre-check.
+  dockerfile-lint:
+    name: "hadolint (Dockerfile)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+
+  # Reads the built image — CIS benchmark and OS/package CVEs.
+  image-scan:
+    name: "Dockle + Trivy (built image)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f docker/Dockerfile -t range-app:ci .
+      - name: Dockle (CIS — credentials in a layer, root user)
+        id: dockle
+        continue-on-error: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            goodwithtech/dockle:v0.4.15 \
+            --exit-code 1 --exit-level fatal range-app:ci
+      - name: Trivy image (HIGH/CRITICAL, fixable only)
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: range-app:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+      - name: Fail if either check flagged
+        run: |
+          if [ "${{ steps.dockle.outcome }}" = "failure" ] || \
+             [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+            echo "::error::Container checks found issues."
+            exit 1
+          fi
+
+  # Generates the SBOM and keeps it as an artefact — the supply-chain record.
+  sbom:
+    name: "SBOM (Syft)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f docker/Dockerfile -t range-app:ci .
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: range-app:ci
+          format: spdx-json
+          output-file: sbom.spdx.json
+      - name: Retain SBOM as evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 90
