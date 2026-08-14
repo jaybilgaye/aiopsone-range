@@ -1,0 +1,157 @@
+# The full DevSecOps pipeline for the aiopsone-range lab — every gate, one repo.
+#
+# This runs against a DELIBERATELY VULNERABLE application, so every gate is
+# EXPECTED to fire. A red run here is the pipeline working: each job catches
+# the class of flaw its chapter is about. On a real repository the same jobs
+# would be green, and a new finding is what turns one red.
+#
+# Six jobs, one per chapter: secrets, SAST, SCA, IaC, container, DAST.
+# They run independently and in parallel, so every gate reports even when
+# its neighbour fails.
+name: devsecops-pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # lets the SAST jobs write to the Security tab
+
+jobs:
+  # 1 ── SECRETS ────────────────────────────────────────────────────────────
+  secrets:
+    name: "Secrets · gitleaks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history — a secret deleted in HEAD still counts
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 2 ── SAST ───────────────────────────────────────────────────────────────
+  sast:
+    name: "SAST · Semgrep"
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep (auto rules + repo-local rules)
+        run: |
+          semgrep scan \
+            --config=auto \
+            --config=.semgrep/ \
+            --sarif --output=semgrep.sarif \
+            --error app/
+      - name: Upload SARIF to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # 3 ── SCA ────────────────────────────────────────────────────────────────
+  sca:
+    name: "SCA · Trivy (dependencies)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: app/
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true          # a bug with no patch is not a task
+          exit-code: 1
+
+  # 4 ── IaC ────────────────────────────────────────────────────────────────
+  iac:
+    name: "IaC · Checkov"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          soft_fail: false              # Checkov owns the IaC gate
+
+  # 5 ── CONTAINER ──────────────────────────────────────────────────────────
+  container:
+    name: "Container · hadolint + Dockle + Trivy image"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: hadolint (Dockerfile lint)
+        id: hadolint
+        continue-on-error: true
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+
+      - name: Build the image
+        run: docker build -f docker/Dockerfile -t range-app:ci .
+
+      - name: Dockle (CIS benchmark, built image)
+        id: dockle
+        continue-on-error: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            goodwithtech/dockle:v0.4.15 \
+            --exit-code 1 --exit-level fatal range-app:ci
+
+      - name: Trivy image (OS + package CVEs)
+        id: trivyimage
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: range-app:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+      - name: Fail the gate if any container check flagged
+        run: |
+          echo "hadolint=${{ steps.hadolint.outcome }}"
+          echo "dockle=${{ steps.dockle.outcome }}"
+          echo "trivy-image=${{ steps.trivyimage.outcome }}"
+          if [ "${{ steps.hadolint.outcome }}" = "failure" ] || \
+             [ "${{ steps.dockle.outcome }}" = "failure" ] || \
+             [ "${{ steps.trivyimage.outcome }}" = "failure" ]; then
+            echo "::error::One or more container checks found issues."
+            exit 1
+          fi
+
+  # 6 ── DAST ───────────────────────────────────────────────────────────────
+  dast:
+    name: "DAST · ZAP baseline"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run the app
+        run: |
+          docker build -f docker/Dockerfile -t range-app:ci .
+          docker run -d --name range -p 3000:3000 range-app:ci
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3000/health && break
+            sleep 2
+          done
+
+      - name: ZAP baseline (passive — reports, does not block)
+        run: |
+          docker run --rm --network host \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:3000 -I
+
+      - name: Stop the app
+        if: always()
+        run: docker rm -f range || true

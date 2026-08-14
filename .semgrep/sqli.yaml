@@ -1,0 +1,18 @@
+# Repo-local Semgrep rule for the aiopsone-range lab.
+#
+# Semgrep's default (--config=auto) rules do not model sql.js's db.exec() as a
+# SQL sink, so they walk past the injection at app/server.js:56. This twelve-
+# line taint rule names the source and the sink, and catches it. The DevSecOps
+# pipeline loads it with `--config=.semgrep/` alongside the auto rules.
+rules:
+  - id: range-sqli-string-concat
+    message: >-
+      SQL built by string concatenation from request input, then executed.
+      Use a parameterised query.
+    severity: ERROR
+    languages: [javascript]
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.query.$PARAM
+    pattern-sinks:
+      - pattern: $DB.exec(...)
