@@ -1,0 +1,56 @@
+# Dependabot for the aiopsone-range lab.
+#
+# IMPORTANT — this is a DELIBERATELY VULNERABLE lab. The pinned-old npm
+# dependencies in app/ are the point: they are what Dependabot has something
+# to open pull requests about, and what the SCA lessons scan.
+#
+# There is NO auto-merge here on purpose. Dependabot will PROPOSE upgrades as
+# pull requests; leaving them open (or closing them) keeps main vulnerable so
+# the lab keeps teaching. Never enable auto-merge on this repository.
+#
+# Activates automatically once the repository is public (or with GitHub
+# Advanced Security on a private repo).
+version: 2
+
+updates:
+  # The application's npm dependencies — the SCA target.
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: deps
+    # Group the low-risk bumps so the PR list stays readable; security updates
+    # still arrive as their own PRs.
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # The container base image (node:18 in docker/Dockerfile).
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - docker
+
+  # The pinned action versions in .github/workflows/.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions

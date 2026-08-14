@@ -1,0 +1,52 @@
+# CodeQL — GitHub-native SAST for the aiopsone-range lab.
+#
+# This is a DELIBERATELY VULNERABLE application. CodeQL is expected to raise
+# alerts here (SQL injection, hardcoded credentials, reflected XSS). Those
+# alerts are the teaching material, not a regression to fix on this repo.
+#
+# On a public repository this runs for free and populates the Security tab.
+# On a private repository it requires GitHub Advanced Security.
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Re-scan weekly so newly published CodeQL queries run against unchanged code.
+    - cron: '0 3 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # required to upload results to the Security tab
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-extended adds the deeper taint-tracking queries — this is
+          # what catches the SQL injection at app/server.js that a lighter
+          # ruleset walks past. security-and-quality also adds maintainability
+          # rules if you want them.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
