@@ -93,7 +93,7 @@ jobs:
       - name: hadolint (Dockerfile lint)
         id: hadolint
         continue-on-error: true
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: docker/Dockerfile
 
