@@ -9,7 +9,7 @@
   },
   "//": "Dependencies are deliberately pinned to old versions with published advisories. This is the SCA lessons' target - let the scanner tell you which CVEs, that is the exercise. sql.js is used instead of sqlite3 so the lab installs on any architecture without a native toolchain.",
   "dependencies": {
-    "axios": "0.21.0",
+    "axios": "1.19.0",
     "ejs": "2.5.7",
     "express": "4.16.0",
     "jsonwebtoken": "8.1.0",
